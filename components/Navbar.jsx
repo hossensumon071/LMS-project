@@ -24,7 +24,7 @@ const navbar = () => {
         </div>
         <div>
           <Button
-            href="/login"
+            href="/users/login"
             placeholder="Sign in"
             color="secondary"
           />
