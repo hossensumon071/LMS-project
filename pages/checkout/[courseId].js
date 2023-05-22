@@ -2,9 +2,15 @@ import SectionHeader from "@/components/SectionHeader";
 import { getCourse } from "@/prisma/courses";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import axios from "axios";
 
-const CheckOut = ({ course }) => {
+/* STRIPE PROMISE */
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY);
+
+const Checkout = ({ course }) => {
   const { data: session } = useSession();
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -16,7 +22,7 @@ const CheckOut = ({ course }) => {
 
   useEffect(() => {
     if (session) {
-      setFormData(() => ({
+      setFormData((prev) => ({
         ...prev,
         name: session.user.name,
         email: session.user.email,
@@ -24,19 +30,46 @@ const CheckOut = ({ course }) => {
     }
   }, [session]);
 
+  /* CHECKOUT HANDLER */
   const handleCheckout = async (e) => {
-    e.preventDefault()
-  }
+    e.preventDefault();
+
+    const stripe = await stripePromise;
+
+    /* SEND A POST REQ. TO THE SERVER */
+    const checkoutSession = await axios.post("/api/create-checkout-session", {
+      items: [course],
+      name: formData.name,
+      email: formData.email,
+      mobile: formData.mobile,
+      address: formData.address,
+      courseTitle: formData.courseTitle,
+      courseId: course.id,
+    });
+
+    /* REDIRECT TO THE STRIPE PAYMENT */
+    const result = await stripe.redirectToCheckout({
+      sessionId: checkoutSession.data.id,
+    });
+
+    if (result.error) {
+      console.log(result.error.message);
+    }
+  };
 
   return (
     <div className="wrapper py-10 min-h-screen">
       <SectionHeader
         span={"Checkout"}
         h2={"Please provide your details"}
-        p={"Fill out this form to contiue checkout"}
+        p={"Fill out this form to continue checkout"}
       />
+
       <div className="flex justify-center">
-        <form onSubmit={handleCheckout} className="flex flex-col gap-5 mt-10 w-full lg:w-[35rem]">
+        <form
+          onSubmit={handleCheckout}
+          className="flex flex-col gap-5 mt-10 w-full lg:w-[35rem]"
+        >
           <div className="form-control flex flex-col gap-2">
             <label htmlFor="name" className="cursor-pointer">
               Name
@@ -50,6 +83,7 @@ const CheckOut = ({ course }) => {
               readOnly
             />
           </div>
+
           <div className="form-control flex flex-col gap-2">
             <label htmlFor="email" className="cursor-pointer">
               Email
@@ -58,29 +92,32 @@ const CheckOut = ({ course }) => {
               className="outline-none border py-3 px-4 rounded-lg focus:border-gray-700"
               type="email"
               id="email"
-              placeholder="example@example.com"
+              placeholder="hello@example.com"
               value={formData.email}
               readOnly
             />
           </div>
+
           <div className="form-control flex flex-col gap-2">
-            <label htmlFor="phone" className="cursor-pointer">
-              Phone Number
+            <label htmlFor="mobile" className="cursor-pointer">
+              Phone number
             </label>
             <input
               className="outline-none border py-3 px-4 rounded-lg focus:border-gray-700"
               type="tel"
-              id="phone"
-              placeholder="+01834xxxxx"
+              id="mobile"
+              placeholder="+88017xxxxxxx"
               value={formData.mobile}
               onChange={(e) =>
                 setFormData({ ...formData, mobile: e.target.value })
               }
+              required
             />
           </div>
+
           <div className="form-control flex flex-col gap-2">
             <label htmlFor="address" className="cursor-pointer">
-              Phone
+              Address
             </label>
             <input
               className="outline-none border py-3 px-4 rounded-lg focus:border-gray-700"
@@ -91,35 +128,43 @@ const CheckOut = ({ course }) => {
               onChange={(e) =>
                 setFormData({ ...formData, address: e.target.value })
               }
+              required
             />
           </div>
+
           <div className="form-control flex flex-col gap-2">
             <label htmlFor="courseTitle" className="cursor-pointer">
-              Course Title
+              Course title
             </label>
             <input
               className="outline-none border py-3 px-4 rounded-lg focus:border-gray-700"
               type="text"
               id="courseTitle"
-              placeholder="Advanced Javascript course 2023"
+              placeholder="Advanced JavaScript Course 2023"
               value={formData.courseTitle}
               readOnly
             />
           </div>
+
           <div className="form-control flex flex-col gap-2">
-            <label htmlFor="courseTitle" className="cursor-pointer">
+            <label htmlFor="price" className="cursor-pointer">
               Price (USD)
             </label>
             <input
               className="outline-none border py-3 px-4 rounded-lg focus:border-gray-700"
               type="number"
               id="price"
-              placeholder="$1000"
+              placeholder="$100"
               value={formData.price}
               readOnly
             />
           </div>
-          <button role="link" type="submit" className="bg-black py-4 rounded-lg text-white hover:bg-gray-700 duration-300 uppercase">
+
+          <button
+            role="link"
+            type="submit"
+            className="bg-black py-4 rounded-lg text-white hover:bg-gray-700 duration-300 uppercase"
+          >
             Proceed to checkout
           </button>
         </form>
@@ -128,7 +173,7 @@ const CheckOut = ({ course }) => {
   );
 };
 
-export default CheckOut;
+export default Checkout;
 
 export const getServerSideProps = async ({ query }) => {
   const course = await getCourse(query.courseId);
